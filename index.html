@@ -79,6 +79,8 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .menu-list{display:flex;flex-direction:column;gap:6px}
 .menu-list .btn{justify-content:flex-start}
 .note{font-size:.8rem;color:var(--muted);line-height:1.5}
+.share-img{width:100%;max-width:300px;display:block;margin:0 auto;border-radius:12px;border:1px solid var(--line)}
+.share-cap{width:100%;box-sizing:border-box;font:inherit;font-size:.85rem;line-height:1.5;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);resize:vertical}
 .swatches{display:flex;gap:8px;flex-wrap:wrap}
 .sw{width:40px;height:40px;border-radius:8px;border:2px solid var(--line);padding:0}
 .sw[aria-pressed="true"]{outline:3px solid var(--accent);outline-offset:2px}
@@ -294,11 +296,13 @@ $('saveBtn').onclick=()=>{
   const warn=st.float.length?`<p style="color:var(--warn)">浮いているマスが${st.float.length}個あります。プリント用ではこのマスは入りません。</p>`:'';
   const used=new Set(); for(let k=0;k<G*G;k++) if(st.grid[k]>0) used.add(st.grid[k]);
   sheet(`<h2>完成・保存</h2>${warn}<p>Bambu Studioで開くと、土台＝フィラメント1、色1〜3＝フィラメント2〜4に割り当て済みです（使っている色：土台${[...used].sort().map(s=>'・'+SLOTNAME[s]).join('')}）。上面を下にした向きで置かれます。</p><div class="menu-list">
+    <button class="btn" id="sShare">インスタに共有</button>
     <button class="btn primary" id="s3mf">プリント用（3MF）を保存</button>
     <button class="btn" id="sWork">作品ファイルを保存（あとで開ける）</button></div>
     ${inArtifact?'<p class="note">お試し版ではファイル名の最後が「.3mf.zip」になります。「.zip」を消すとBambu Studioで開けます。</p>':''}
     <div class="btns"><button class="btn" id="sClose">とじる</button></div>`,s=>{
     s.querySelector('#sClose').onclick=closeSheet;
+    s.querySelector('#sShare').onclick=()=>{ closeSheet(); openShare(); };
     s.querySelector('#s3mf').onclick=async()=>{ const b=s.querySelector('#s3mf'); b.disabled=true; b.textContent='作っています…'; try{ const bytes=build3MF(); closeSheet(); await offer(`keytop-${stamp()}${ext}`,new Blob([bytes])); }catch(e){ console.error(e); closeSheet(); toast('3MFを作れませんでした'); } };
     s.querySelector('#sWork').onclick=async()=>{ closeSheet(); await offer(`keytop-${stamp()}.json`,JSON.stringify(serialize())); };
   });
@@ -436,6 +440,51 @@ function setView(v){ if(!gl) return; const d=70; const P={top:[0,-d*0.25,d],side
   for(const [id,n] of [['viewTop','top'],['viewSide','side'],['viewBack','back']]) $(id).setAttribute('aria-pressed',String(v===n)); }
 $('open3d').onclick=open3D; $('close3d').onclick=()=>{ $('v3').hidden=true; if(gl) gl.run=false; };
 $('viewTop').onclick=()=>setView('top'); $('viewSide').onclick=()=>setView('side'); $('viewBack').onclick=()=>setView('back');
+
+// ---------- インスタに共有 ----------
+const CAPTION='キーキャップをデザインしてみた！\n\n@8.bit.l__l @kibochalle\n#鉢bit #ハコイチ #希望ヶ丘チャレンジベース #3Dプリンター #キーキャップ #ドット絵';
+async function shareImage(){
+  await loadThree();
+  const S=1080, r=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});
+  r.setPixelRatio(1); r.setSize(S,S,false);
+  const scene=new THREE.Scene(), cam=new THREE.PerspectiveCamera(30,1,1,2000); cam.up.set(0,0,1);
+  scene.add(new THREE.HemisphereLight(0xffffff,0x555a60,1.5)); const d1=new THREE.DirectionalLight(0xffffff,1.7); d1.position.set(-30,-40,60); scene.add(d1); const d2=new THREE.DirectionalLight(0xffffff,0.7); d2.position.set(40,30,-30); scene.add(d2);
+  const group=new THREE.Group(); group.rotation.x=Math.PI; scene.add(group);
+  const mats=st.colors.map(c=>new THREE.MeshStandardMaterial({color:c,roughness:.6,metalness:.02})), geos=[];
+  for(const [name,pos,ext] of buildParts()){ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.computeVertexNormals(); geos.push(g); group.add(new THREE.Mesh(g,mats[ext-1])); }
+  group.updateMatrixWorld(true);
+  const box=new THREE.Box3().setFromObject(group), ctr=box.getCenter(new THREE.Vector3()), rad=box.getSize(new THREE.Vector3()).length()/2;
+  const dir=new THREE.Vector3(0.5,-0.75,0.85).normalize(), dist=rad/Math.sin(THREE.MathUtils.degToRad(15))*1.08;
+  cam.position.copy(ctr).addScaledVector(dir,dist); cam.lookAt(ctr); cam.updateProjectionMatrix();
+  r.render(scene,cam);
+  const out=document.createElement('canvas'); out.width=out.height=S; const c=out.getContext('2d');
+  const bg=c.createLinearGradient(0,0,0,S); bg.addColorStop(0,'#f6f3ec'); bg.addColorStop(1,'#e2ddd1'); c.fillStyle=bg; c.fillRect(0,0,S,S);
+  c.drawImage(r.domElement,60,10,S-120,S-120);
+  try{ await document.fonts.load('800 44px "M PLUS Rounded 1c"'); await document.fonts.load('500 30px "M PLUS Rounded 1c"'); }catch(e){}
+  c.textAlign='center'; c.fillStyle='#22211d'; c.font='800 44px "M PLUS Rounded 1c", sans-serif'; c.fillText('鉢-bit × ハコイチ',S/2,S-78);
+  c.fillStyle='#625f57'; c.font='500 30px "M PLUS Rounded 1c", sans-serif'; c.fillText('@8.bit.l__l',S/2,S-34);
+  geos.forEach(g=>g.dispose()); mats.forEach(m=>m.dispose()); r.dispose(); try{ r.forceContextLoss(); }catch(e){}
+  return await new Promise((res,rej)=>out.toBlob(b=>b?res(b):rej(new Error('blob')),'image/png'));
+}
+async function openShare(){
+  sheet(`<h2>インスタに共有</h2><p>画像を作っています…</p>`);
+  let blob; try{ blob=await shareImage(); }catch(e){ console.error(e); closeSheet(); toast('画像を作れませんでした（通信を確認してください）'); return; }
+  const file=new File([blob],`keycap-${stamp()}.png`,{type:'image/png'}), url=URL.createObjectURL(blob);
+  let canShare=false; try{ canShare=!!(navigator.canShare&&navigator.canShare({files:[file]})); }catch(e){}
+  sheet(`<h2>インスタに共有</h2><img class="share-img" src="${url}" alt="できたキーキャップの画像">
+    <p>ボタンを押すと、下の文章もコピーされます。インスタの投稿画面で「ペースト」してね。</p>
+    <textarea class="share-cap" id="capt" rows="5" aria-label="投稿する文章"></textarea>
+    <p class="note">インスタは13才から使えます。おうちの人といっしょに投稿してね。</p>
+    <div class="menu-list">${canShare?'<button class="btn primary" id="shGo">文章をコピーして共有する</button>':''}<button class="btn${canShare?'':' primary'}" id="shSave">文章をコピーして画像を保存</button></div>
+    <div class="btns"><button class="btn" id="shClose">とじる</button></div>`,s=>{
+    const ta=s.querySelector('#capt'); ta.value=CAPTION;
+    const copy=()=>{ const t=ta.value; try{ ta.select(); document.execCommand('copy'); ta.setSelectionRange(0,0); }catch(e){} try{ navigator.clipboard&&navigator.clipboard.writeText(t).catch(()=>{}); }catch(e){} };
+    s.querySelector('#shClose').onclick=()=>{ closeSheet(); setTimeout(()=>URL.revokeObjectURL(url),1000); };
+    const go=s.querySelector('#shGo');
+    if(go) go.onclick=async()=>{ copy(); try{ await navigator.share({files:[file]}); }catch(e){ if(e&&e.name==='AbortError') return; toast('共有できませんでした。画像を保存してください'); } };
+    s.querySelector('#shSave').onclick=async()=>{ copy(); await offer(file.name,blob); };
+  });
+}
 
 // ---------- 小物 ----------
 let toastT=null; function toast(msg){ let t=document.querySelector('.toast'); if(!t){t=document.createElement('div');t.className='toast';t.setAttribute('role','status');document.body.append(t);} t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>{t.hidden=true;},2600); }
