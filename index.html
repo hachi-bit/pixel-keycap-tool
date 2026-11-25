@@ -443,7 +443,7 @@ $('open3d').onclick=open3D; $('close3d').onclick=()=>{ $('v3').hidden=true; if(g
 $('viewTop').onclick=()=>setView('top'); $('viewSide').onclick=()=>setView('side'); $('viewBack').onclick=()=>setView('back');
 
 // ---------- インスタに共有 ----------
-const CAPTION='キーキャップをデザインしてみた！\n\n@8.bit.l__l @kibochalle\n#キボチャレキーキャップ #鉢bit #ハコイチ #希望ヶ丘チャレンジベース #3Dプリンター #キーキャップ #ドット絵';
+const CAPTION='キーキャップをデザインしてみた！\n\n@8.bit.l__l @kibochalle\n#鉢bitキーキャップ募集 #鉢bit #ハコイチ #希望ヶ丘チャレンジベース #3Dプリンター #キーキャップ #ドット絵';
 async function shareImage(){
   await loadThree();
   const S=1080, r=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});
