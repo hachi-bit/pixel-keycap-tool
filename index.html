@@ -150,6 +150,8 @@ const BODY_F="2QKoAqsCMAXZAgAAEQIwBTQF8AARAm0BggDwAGUDIQSCAFAFQgEhBMQEjwNCAdgAbw
 <script type="module">
 const $=id=>document.getElementById(id);
 const inArtifact=!!(window.claude&&window.claude.use);
+// 3MF（プリント用データ）の保存はClaude版だけ。公開版（GitHub Pages）では出さない
+const FULL=inArtifact;
 // ---------- 仕様（mm） ----------
 const G=12, CELL=2, ORG=-12, F0=2, F1=9;          // 12×12マス、枠は2〜9（8×8）
 const INLAY=0.4, H=8, TOPS=7.928/8;      // TOPS: 上面の縮み（ベース上面は半幅7.928mm）                              // 色ドットの厚み、キーの高さ
@@ -294,17 +296,17 @@ async function offer(name,data){
   const url=URL.createObjectURL(data instanceof Blob?data:new Blob([data])); const a=document.createElement('a'); a.href=url; a.download=name; document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000); toast('保存しました'); }
 $('saveBtn').onclick=()=>{
   const ext=inArtifact?'.3mf.zip':'.3mf';
-  const warn=st.float.length?`<p style="color:var(--warn)">浮いているマスが${st.float.length}個あります。プリント用ではこのマスは入りません。</p>`:'';
+  const warn=FULL&&st.float.length?`<p style="color:var(--warn)">浮いているマスが${st.float.length}個あります。プリント用ではこのマスは入りません。</p>`:'';
   const used=new Set(); for(let k=0;k<G*G;k++) if(st.grid[k]>0) used.add(st.grid[k]);
-  sheet(`<h2>完成・保存</h2>${warn}<p>Bambu Studioで開くと、土台＝フィラメント1、色1〜3＝フィラメント2〜4に割り当て済みです（使っている色：土台${[...used].sort().map(s=>'・'+SLOTNAME[s]).join('')}）。上面を下にした向きで置かれます。</p><div class="menu-list">
+  sheet(`<h2>完成・保存</h2>${warn}${FULL?`<p>Bambu Studioで開くと、土台＝フィラメント1、色1〜3＝フィラメント2〜4に割り当て済みです（使っている色：土台${[...used].sort().map(s=>'・'+SLOTNAME[s]).join('')}）。上面を下にした向きで置かれます。</p>`:'<p>作品ファイルを保存しておくと、あとで開いて続きを描けます。</p>'}<div class="menu-list">
     <button class="btn" id="sShare">インスタに共有</button>
-    <button class="btn primary" id="s3mf">プリント用（3MF）を保存</button>
+    ${FULL?'<button class="btn primary" id="s3mf">プリント用（3MF）を保存</button>':''}
     <button class="btn" id="sWork">作品ファイルを保存（あとで開ける）</button></div>
     ${inArtifact?'<p class="note">お試し版ではファイル名の最後が「.3mf.zip」になります。「.zip」を消すとBambu Studioで開けます。</p>':''}
     <div class="btns"><button class="btn" id="sClose">とじる</button></div>`,s=>{
     s.querySelector('#sClose').onclick=closeSheet;
     s.querySelector('#sShare').onclick=()=>{ closeSheet(); openShare(); };
-    s.querySelector('#s3mf').onclick=async()=>{ const b=s.querySelector('#s3mf'); b.disabled=true; b.textContent='作っています…'; try{ const bytes=build3MF(); closeSheet(); await offer(`keytop-${stamp()}${ext}`,new Blob([bytes])); }catch(e){ console.error(e); closeSheet(); toast('3MFを作れませんでした'); } };
+    if(FULL) s.querySelector('#s3mf').onclick=async()=>{ const b=s.querySelector('#s3mf'); b.disabled=true; b.textContent='作っています…'; try{ const bytes=build3MF(); closeSheet(); await offer(`keytop-${stamp()}${ext}`,new Blob([bytes])); }catch(e){ console.error(e); closeSheet(); toast('3MFを作れませんでした'); } };
     s.querySelector('#sWork').onclick=async()=>{ closeSheet(); await offer(`keytop-${stamp()}.json`,JSON.stringify(serialize())); };
   });
 };
@@ -411,7 +413,7 @@ function zip(files){
     central.push(new Uint8Array(c.buffer),nb); off+=30+nb.length+data.length; }
   const csize=central.reduce((s,a)=>s+a.length,0); const e=new DataView(new ArrayBuffer(22)); e.setUint32(0,0x06054b50,true); e.setUint16(8,files.length,true); e.setUint16(10,files.length,true); e.setUint32(12,csize,true); e.setUint32(16,off,true);
   const all=[...chunks,...central,new Uint8Array(e.buffer)]; const out=new Uint8Array(all.reduce((s,a)=>s+a.length,0)); let p=0; for(const a of all){out.set(a,p);p+=a.length;} return out; }
-window.__pk={buildParts,build3MF,st,fromRows,refresh};
+window.__pk=FULL?{buildParts,build3MF,st,fromRows,refresh}:{st,fromRows,refresh};
 
 // ---------- 3D ----------
 let THREE=null, Orbit=null, gl=null;
